@@ -1,0 +1,637 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>PSX Stock Tracker</title>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg:#0d1421;--surface:#111c2e;--card:#162033;--border:#1e2d45;
+  --teal:#0ea5a0;--teal-dim:rgba(14,165,160,.12);
+  --gain:#22c55e;--gain-dim:rgba(34,197,94,.12);
+  --loss:#ef4444;--loss-dim:rgba(239,68,68,.12);
+  --amber:#f59e0b;--purple:#a855f7;
+  --t1:#e2e8f0;--t2:#64748b;--t3:#94a3b8;
+  --r:10px;--rs:6px;
+}
+body{background:var(--bg);color:var(--t1);font-family:'Inter','Segoe UI',system-ui,sans-serif;font-size:14px;min-height:100vh}
+
+/* ── Auth screens ── */
+.auth-wrap{min-height:100vh;display:flex;align-items:center;justify-content:center;padding:20px}
+.auth-box{background:var(--card);border:1px solid var(--border);border-radius:16px;padding:40px;width:100%;max-width:420px}
+.auth-logo{display:flex;align-items:center;gap:12px;margin-bottom:28px;justify-content:center}
+.auth-logo-mark{width:44px;height:44px;background:var(--teal);border-radius:12px;display:grid;place-items:center;font-weight:800;font-size:13px;color:#fff;letter-spacing:-0.5px}
+.auth-logo-text{font-size:20px;font-weight:700;color:var(--t1)}
+.auth-logo-sub{font-size:12px;color:var(--t2);margin-top:1px}
+.auth-title{font-size:22px;font-weight:700;color:var(--t1);margin-bottom:6px;text-align:center}
+.auth-sub{font-size:13px;color:var(--t2);text-align:center;margin-bottom:24px}
+.form-group{margin-bottom:16px}
+.form-label{display:block;font-size:12px;color:var(--t3);margin-bottom:6px;font-weight:500;text-transform:uppercase;letter-spacing:.5px}
+.form-input{
+  width:100%;padding:11px 14px;background:var(--surface);border:1px solid var(--border);
+  border-radius:var(--rs);color:var(--t1);font-size:14px;outline:none;transition:border-color .15s
+}
+.form-input:focus{border-color:var(--teal)}
+.form-input::placeholder{color:var(--t2)}
+.btn-primary{
+  width:100%;padding:12px;background:var(--teal);color:#fff;border:none;
+  border-radius:var(--rs);font-size:14px;font-weight:600;cursor:pointer;transition:opacity .15s;margin-top:8px
+}
+.btn-primary:hover{opacity:.88}
+.btn-primary:disabled{opacity:.5;cursor:not-allowed}
+.auth-switch{text-align:center;margin-top:20px;font-size:13px;color:var(--t2)}
+.auth-switch a{color:var(--teal);cursor:pointer;text-decoration:none;font-weight:500}
+.auth-switch a:hover{text-decoration:underline}
+.auth-error{background:var(--loss-dim);border:1px solid rgba(239,68,68,.3);color:var(--loss);padding:10px 14px;border-radius:var(--rs);font-size:13px;margin-bottom:14px;display:none}
+
+/* ── App shell ── */
+.app-shell{display:none;flex-direction:column;min-height:100vh}
+
+/* ── Navbar ── */
+.navbar{
+  background:var(--surface);border-bottom:1px solid var(--border);
+  padding:0 24px;display:flex;align-items:center;justify-content:space-between;height:56px;
+  position:sticky;top:0;z-index:100
+}
+.nav-left{display:flex;align-items:center;gap:12px}
+.nav-logo{width:32px;height:32px;background:var(--teal);border-radius:8px;display:grid;place-items:center;font-weight:800;font-size:11px;color:#fff}
+.nav-title{font-size:15px;font-weight:700;color:var(--t1)}
+.nav-sub{font-size:11px;color:var(--t2)}
+.nav-right{display:flex;align-items:center;gap:12px}
+.live-pill{display:flex;align-items:center;gap:5px;font-size:11px;color:var(--gain);border:1px solid rgba(34,197,94,.3);padding:4px 10px;border-radius:99px}
+.live-dot{width:5px;height:5px;border-radius:50%;background:var(--gain);animation:blink 1.4s infinite}
+@keyframes blink{0%,100%{opacity:1}50%{opacity:.2}}
+.user-pill{display:flex;align-items:center;gap:8px;background:var(--card);border:1px solid var(--border);padding:6px 12px;border-radius:99px;font-size:13px;cursor:pointer}
+.user-avatar{width:22px;height:22px;background:var(--teal-dim);border-radius:50%;display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--teal)}
+.logout-btn{font-size:12px;color:var(--loss);background:none;border:1px solid rgba(239,68,68,.3);padding:5px 12px;border-radius:var(--rs);cursor:pointer;transition:all .15s}
+.logout-btn:hover{background:var(--loss-dim)}
+
+/* ── Content ── */
+.content{padding:20px 24px;max-width:1280px;margin:0 auto;width:100%}
+
+/* ── Ticker ── */
+.ticker-wrap{background:var(--surface);border:1px solid var(--border);border-radius:var(--r);padding:8px 16px;overflow:hidden;white-space:nowrap;margin-bottom:18px}
+.ticker-inner{display:inline-flex;gap:28px;animation:scroll 35s linear infinite}
+@keyframes scroll{0%{transform:translateX(0)}100%{transform:translateX(-50%)}}
+.t-item{display:inline-flex;align-items:center;gap:7px;font-size:12px}
+.t-sym{font-weight:700;color:var(--t1)}
+.t-price{color:var(--t3)}
+.t-chg{font-weight:600}
+.up{color:var(--gain)}.dn{color:var(--loss)}
+
+/* ── Metric cards ── */
+.metrics{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.metric{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
+.metric-label{font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.metric-value{font-size:24px;font-weight:700;color:var(--t1);line-height:1;margin-bottom:5px}
+.metric-delta{font-size:12px}
+
+/* ── Main grid ── */
+.main-grid{display:grid;grid-template-columns:1fr 300px;gap:14px;margin-bottom:14px}
+.card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:18px 20px}
+.card-hdr{display:flex;align-items:center;justify-content:space-between;margin-bottom:14px}
+.card-title{font-size:14px;font-weight:600;color:var(--t1)}
+
+/* ── Tabs ── */
+.tabs{display:flex;gap:4px}
+.tab{font-size:12px;padding:4px 10px;border-radius:6px;border:1px solid transparent;color:var(--t2);background:transparent;cursor:pointer;transition:all .15s}
+.tab.active{background:var(--teal-dim);color:var(--teal);border-color:var(--teal)}
+.tab:hover:not(.active){background:var(--surface);color:var(--t3)}
+.chart-wrap{position:relative;height:220px}
+
+/* ── Watchlist ── */
+.wl-item{display:flex;align-items:center;justify-content:space-between;padding:9px 6px;border-bottom:1px solid var(--border);cursor:pointer;border-radius:var(--rs);transition:background .1s}
+.wl-item:last-child{border-bottom:none}
+.wl-item:hover{background:var(--surface)}
+.wl-item.selected{background:var(--teal-dim)}
+.wl-left{display:flex;align-items:center;gap:9px}
+.wl-badge{width:30px;height:30px;border-radius:7px;display:grid;place-items:center;font-size:10px;font-weight:700;color:var(--teal);background:var(--teal-dim);flex-shrink:0}
+.wl-sym{font-size:13px;font-weight:600;color:var(--t1)}
+.wl-sector{font-size:11px;color:var(--t2);margin-top:1px}
+.wl-right{text-align:right}
+.wl-price{font-size:13px;font-weight:600;color:var(--t1)}
+.wl-chg{font-size:11px;padding:2px 7px;border-radius:4px;margin-top:3px;display:inline-block;font-weight:500}
+.wl-chg.up{background:var(--gain-dim);color:var(--gain)}
+.wl-chg.dn{background:var(--loss-dim);color:var(--loss)}
+.wl-star{font-size:14px;margin-left:6px;opacity:.4;transition:opacity .15s;cursor:pointer}
+.wl-star.active{opacity:1}
+
+/* ── Bottom grid ── */
+.bottom-grid{display:grid;grid-template-columns:1fr 1fr 1fr;gap:14px}
+.detail-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-top:12px}
+.detail-cell{background:var(--surface);border-radius:var(--rs);padding:10px 12px;border:1px solid var(--border)}
+.detail-label{font-size:11px;color:var(--t2);margin-bottom:4px}
+.detail-val{font-size:14px;font-weight:600;color:var(--t1)}
+
+/* ── Sector bars ── */
+.sector-row{display:flex;align-items:center;gap:8px;margin-top:10px;font-size:12px}
+.sector-name{min-width:88px;color:var(--t3)}
+.sector-track{flex:1;height:5px;background:var(--border);border-radius:99px;overflow:hidden}
+.sector-fill{height:100%;border-radius:99px;background:var(--teal);transition:width .6s ease}
+.sector-pct{min-width:34px;text-align:right;font-weight:600;color:var(--t1);font-size:11px}
+
+/* ── Activity feed ── */
+.activity-item{display:flex;gap:10px;padding:8px 0;border-bottom:1px solid var(--border);font-size:12px}
+.activity-item:last-child{border-bottom:none}
+.act-icon{width:28px;height:28px;border-radius:7px;display:grid;place-items:center;font-size:13px;flex-shrink:0}
+.act-action{font-weight:600;color:var(--t1)}
+.act-detail{color:var(--t2);margin-top:1px}
+.act-time{color:var(--t2);margin-top:2px;font-size:11px}
+
+/* ── Toast ── */
+.toast{position:fixed;bottom:24px;right:24px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 18px;font-size:13px;box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:9999;display:none;animation:slideup .2s ease}
+@keyframes slideup{from{transform:translateY(12px);opacity:0}to{transform:translateY(0);opacity:1}}
+
+/* ── Scrollbar ── */
+::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════ AUTH SCREENS ═══════════════════════════ -->
+
+<!-- Login -->
+<div id="loginScreen" class="auth-wrap">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <div class="auth-logo-mark">PSX</div>
+      <div><div class="auth-logo-text">Stock Tracker</div><div class="auth-logo-sub">Pakistan Stock Exchange</div></div>
+    </div>
+    <div class="auth-title">Welcome back</div>
+    <div class="auth-sub">Sign in to your account</div>
+    <div class="auth-error" id="loginErr"></div>
+    <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="loginEmail" type="email" placeholder="you@example.com"/></div>
+    <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="loginPass" type="password" placeholder="••••••••"/></div>
+    <button class="btn-primary" onclick="doLogin()">Sign in</button>
+    <div class="auth-switch">Don't have an account? <a onclick="showScreen('register')">Create one</a></div>
+  </div>
+</div>
+
+<!-- Register -->
+<div id="registerScreen" class="auth-wrap" style="display:none">
+  <div class="auth-box">
+    <div class="auth-logo">
+      <div class="auth-logo-mark">PSX</div>
+      <div><div class="auth-logo-text">Stock Tracker</div><div class="auth-logo-sub">Pakistan Stock Exchange</div></div>
+    </div>
+    <div class="auth-title">Create account</div>
+    <div class="auth-sub">Start tracking PSX stocks today</div>
+    <div class="auth-error" id="regErr"></div>
+    <div class="form-group"><label class="form-label">Full Name</label><input class="form-input" id="regName" placeholder="Ali Hassan"/></div>
+    <div class="form-group"><label class="form-label">Username</label><input class="form-input" id="regUser" placeholder="alihassan" autocomplete="username"/></div>
+    <div class="form-group"><label class="form-label">Email</label><input class="form-input" id="regEmail" type="email" placeholder="ali@example.com"/></div>
+    <div class="form-group"><label class="form-label">Password</label><input class="form-input" id="regPass" type="password" placeholder="Min 6 characters"/></div>
+    <button class="btn-primary" onclick="doRegister()">Create account</button>
+    <div class="auth-switch">Already have an account? <a onclick="showScreen('login')">Sign in</a></div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════ APP SHELL ════════════════════════════════ -->
+
+<div id="appShell" class="app-shell">
+
+  <!-- Navbar -->
+  <nav class="navbar">
+    <div class="nav-left">
+      <div class="nav-logo">PSX</div>
+      <div><div class="nav-title">Stock Tracker</div><div class="nav-sub">KSE-100 · Pakistan</div></div>
+    </div>
+    <div class="nav-right">
+      <div class="live-pill"><div class="live-dot"></div> Live</div>
+      <div class="user-pill">
+        <div class="user-avatar" id="userAvatar">?</div>
+        <span id="userLabel">—</span>
+      </div>
+      <button class="logout-btn" onclick="doLogout()">Sign out</button>
+    </div>
+  </nav>
+
+  <div class="content">
+
+    <!-- Ticker -->
+    <div class="ticker-wrap"><div class="ticker-inner" id="ticker">Loading...</div></div>
+
+    <!-- Metrics -->
+    <div class="metrics">
+      <div class="metric"><div class="metric-label">KSE-100 Index</div><div class="metric-value" id="mIdx">—</div><div class="metric-delta" id="mIdxD">—</div></div>
+      <div class="metric"><div class="metric-label">Total Volume</div><div class="metric-value" id="mVol">—</div><div class="metric-delta" style="color:var(--t2)">shares traded</div></div>
+      <div class="metric"><div class="metric-label">Advancers</div><div class="metric-value up" id="mAdv">—</div><div class="metric-delta" id="mAdvD" style="color:var(--t2)">—</div></div>
+      <div class="metric"><div class="metric-label">Last Updated</div><div class="metric-value" id="mTime" style="font-size:15px">—</div><div class="metric-delta" style="color:var(--t2)">market data</div></div>
+    </div>
+
+    <!-- Chart + Watchlist -->
+    <div class="main-grid">
+      <div class="card">
+        <div class="card-hdr">
+          <div>
+            <div class="card-title" id="chartTitle">Select a stock</div>
+            <div style="font-size:12px;color:var(--t2);margin-top:2px" id="chartSub"></div>
+          </div>
+          <div class="tabs">
+            <button class="tab" onclick="setPeriod('1D',this)">1D</button>
+            <button class="tab active" onclick="setPeriod('1W',this)">1W</button>
+            <button class="tab" onclick="setPeriod('1M',this)">1M</button>
+            <button class="tab" onclick="setPeriod('3M',this)">3M</button>
+          </div>
+        </div>
+        <div class="chart-wrap"><canvas id="priceChart"></canvas></div>
+      </div>
+
+      <div class="card" style="padding:14px 16px;overflow-y:auto;max-height:320px">
+        <div class="card-hdr">
+          <div class="card-title">All Stocks</div>
+          <span style="font-size:18px;color:var(--amber)">★</span>
+        </div>
+        <div id="watchlist">Loading...</div>
+      </div>
+    </div>
+
+    <!-- Detail + Sectors + Activity -->
+    <div class="bottom-grid">
+      <div class="card">
+        <div class="card-hdr">
+          <div><div class="card-title" id="detailTitle">Select a stock</div><div style="font-size:11px;color:var(--t2);margin-top:2px" id="detailSector"></div></div>
+          <div id="detailBadge"></div>
+        </div>
+        <div class="detail-grid" id="detailGrid">
+          <div class="detail-cell" style="grid-column:1/-1;text-align:center;color:var(--t2)">Click any stock to see details</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Sector Breakdown</div><span style="font-size:11px;color:var(--t2)">KSE-100 weight</span></div>
+        <div id="sectors">Loading...</div>
+      </div>
+
+      <div class="card" style="overflow-y:auto;max-height:340px">
+        <div class="card-hdr"><div class="card-title">My Activity</div><span style="font-size:11px;color:var(--t2)" id="actCount">—</span></div>
+        <div id="activityFeed">Loading...</div>
+      </div>
+    </div>
+
+  </div><!-- /content -->
+</div><!-- /appShell -->
+
+<div class="toast" id="toast"></div>
+
+<script>
+// ═══════════════════════════════════════════════════════════════════════════
+// CONFIG
+// ═══════════════════════════════════════════════════════════════════════════
+const API = 'http://localhost:8000';
+let token    = localStorage.getItem('psx_token') || null;
+let me       = JSON.parse(localStorage.getItem('psx_user') || 'null');
+let chart    = null;
+let allQuotes = [];
+let selectedSym = null;
+let currentPeriod = '1W';
+
+// ═══════════════════════════════════════════════════════════════════════════
+// HTTP helpers
+// ═══════════════════════════════════════════════════════════════════════════
+async function req(method, path, body = null) {
+  const opts = {
+    method,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { 'Authorization': `Bearer ${token}` } : {})
+    }
+  };
+  if (body) opts.body = JSON.stringify(body);
+  const res = await fetch(API + path, opts);
+  const data = await res.json();
+  if (!res.ok) throw new Error(data.detail || `Error ${res.status}`);
+  return data;
+}
+
+const get  = path       => req('GET',    path);
+const post = (p, b)     => req('POST',   p, b);
+const del  = path       => req('DELETE', path);
+
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTH
+// ═══════════════════════════════════════════════════════════════════════════
+function showScreen(name) {
+  document.getElementById('loginScreen').style.display    = name === 'login'    ? 'flex' : 'none';
+  document.getElementById('registerScreen').style.display = name === 'register' ? 'flex' : 'none';
+  document.getElementById('appShell').style.display       = name === 'app'      ? 'flex' : 'none';
+}
+
+function showErr(id, msg) {
+  const el = document.getElementById(id);
+  el.textContent = msg;
+  el.style.display = 'block';
+  setTimeout(() => el.style.display = 'none', 5000);
+}
+
+async function doLogin() {
+  const email = document.getElementById('loginEmail').value.trim();
+  const pass  = document.getElementById('loginPass').value;
+  if (!email || !pass) return showErr('loginErr', 'Please fill all fields.');
+  try {
+    const data = await post('/auth/login', { email, password: pass });
+    token = data.access_token;
+    me    = data.user;
+    localStorage.setItem('psx_token', token);
+    localStorage.setItem('psx_user',  JSON.stringify(me));
+    showApp();
+  } catch(e) {
+    showErr('loginErr', e.message);
+  }
+}
+
+async function doRegister() {
+  const full  = document.getElementById('regName').value.trim();
+  const user  = document.getElementById('regUser').value.trim();
+  const email = document.getElementById('regEmail').value.trim();
+  const pass  = document.getElementById('regPass').value;
+  if (!full || !user || !email || !pass) return showErr('regErr', 'Please fill all fields.');
+  try {
+    await post('/auth/register', { full_name: full, username: user, email, password: pass });
+    showToast('Account created! Please sign in.');
+    showScreen('login');
+  } catch(e) {
+    showErr('regErr', e.message);
+  }
+}
+
+function doLogout() {
+  token = null; me = null;
+  localStorage.removeItem('psx_token');
+  localStorage.removeItem('psx_user');
+  showScreen('login');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// TOAST
+// ═══════════════════════════════════════════════════════════════════════════
+function showToast(msg, color = 'var(--teal)') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.style.borderColor = color;
+  t.style.display = 'block';
+  setTimeout(() => t.style.display = 'none', 3000);
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// FORMATTING
+// ═══════════════════════════════════════════════════════════════════════════
+const fmt = (n, d=2) => parseFloat(n).toLocaleString('en-PK',{minimumFractionDigits:d,maximumFractionDigits:d});
+const fmtV = n => n>=1e9?(n/1e9).toFixed(1)+'B':n>=1e6?(n/1e6).toFixed(1)+'M':n>=1e3?(n/1e3).toFixed(0)+'K':n;
+const fmtT = s => { const d=new Date(s); return d.toLocaleTimeString('en-PK',{hour:'2-digit',minute:'2-digit'}); };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// RENDER FUNCTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+function renderTicker(quotes) {
+  const items = [...quotes,...quotes].map(q => {
+    const cls = q.change_pct >= 0 ? 'up' : 'dn';
+    const sgn = q.change_pct >= 0 ? '+' : '';
+    return `<span class="t-item">
+      <span class="t-sym">${q.symbol}</span>
+      <span class="t-price">PKR ${fmt(q.price)}</span>
+      <span class="t-chg ${cls}">${sgn}${fmt(q.change_pct)}%</span>
+    </span>`;
+  }).join('<span style="color:var(--border);margin:0 4px">·</span>');
+  document.getElementById('ticker').innerHTML = items;
+}
+
+function renderMetrics(s) {
+  document.getElementById('mIdx').textContent  = fmt(s.index_value, 0);
+  const up = s.index_change_pct >= 0;
+  document.getElementById('mIdxD').innerHTML   = `<span class="${up?'up':'dn'}">${up?'+':''}${fmt(s.index_change_pct)}% today</span>`;
+  document.getElementById('mVol').textContent  = fmtV(s.total_volume);
+  document.getElementById('mAdv').textContent  = s.advancers;
+  document.getElementById('mAdvD').textContent = `vs ${s.decliners} decliners`;
+  document.getElementById('mTime').textContent = fmtT(s.last_updated);
+}
+
+function renderWatchlist(quotes) {
+  document.getElementById('watchlist').innerHTML = quotes.map(q => {
+    const cls  = q.change_pct >= 0 ? 'up' : 'dn';
+    const sgn  = q.change_pct >= 0 ? '+' : '';
+    const sel  = q.symbol === selectedSym ? 'selected' : '';
+    const star = q.in_watchlist ? 'active' : '';
+    return `<div class="wl-item ${sel}" onclick="selectStock('${q.symbol}')">
+      <div class="wl-left">
+        <div class="wl-badge">${q.symbol.slice(0,2)}</div>
+        <div>
+          <div class="wl-sym">${q.symbol}</div>
+          <div class="wl-sector">${q.sector}</div>
+        </div>
+      </div>
+      <div class="wl-right" style="display:flex;align-items:center;gap:6px">
+        <div>
+          <div class="wl-price">PKR ${fmt(q.price)}</div>
+          <div class="wl-chg ${cls}">${sgn}${fmt(q.change_pct)}%</div>
+        </div>
+        <span class="wl-star ${star}" onclick="toggleWatchlist(event,'${q.symbol}',${q.in_watchlist})">★</span>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+function renderDetail(q) {
+  const cls = q.change_pct >= 0 ? 'up' : 'dn';
+  const sgn = q.change_pct >= 0 ? '+' : '';
+  document.getElementById('detailTitle').textContent  = `${q.symbol} · ${q.company_name}`;
+  document.getElementById('detailSector').textContent = q.sector;
+  document.getElementById('detailBadge').innerHTML    =
+    `<span class="wl-chg ${cls}" style="font-size:13px">${sgn}${fmt(q.change_pct)}%</span>`;
+  document.getElementById('detailGrid').innerHTML = `
+    <div class="detail-cell"><div class="detail-label">Price</div><div class="detail-val">PKR ${fmt(q.price)}</div></div>
+    <div class="detail-cell"><div class="detail-label">Prev Close</div><div class="detail-val">PKR ${fmt(q.prev_close)}</div></div>
+    <div class="detail-cell"><div class="detail-label">Open</div><div class="detail-val">PKR ${fmt(q.open)}</div></div>
+    <div class="detail-cell"><div class="detail-label">Volume</div><div class="detail-val">${fmtV(q.volume)}</div></div>
+    <div class="detail-cell"><div class="detail-label">Day High</div><div class="detail-val up">PKR ${fmt(q.high)}</div></div>
+    <div class="detail-cell"><div class="detail-label">Day Low</div><div class="detail-val dn">PKR ${fmt(q.low)}</div></div>
+  `;
+}
+
+function renderSectors(sectors) {
+  document.getElementById('sectors').innerHTML = sectors.map(s => {
+    const cls = s.change_pct >= 0 ? 'up' : 'dn';
+    const sgn = s.change_pct >= 0 ? '+' : '';
+    return `<div class="sector-row">
+      <div class="sector-name">${s.sector}</div>
+      <div class="sector-track"><div class="sector-fill" style="width:${s.weight_pct}%"></div></div>
+      <div class="sector-pct">${s.weight_pct}%</div>
+      <div class="sector-pct ${cls}" style="min-width:44px">${sgn}${s.change_pct}%</div>
+    </div>`;
+  }).join('');
+}
+
+const ACT_ICONS = {
+  LOGIN:'🔑', REGISTER:'🎉', VIEW_STOCK:'📈', VIEW_ALL_STOCKS:'📊',
+  VIEW_MARKET:'🌐', VIEW_HISTORY:'📉', ADD_WATCHLIST:'⭐', REMOVE_WATCHLIST:'✖',
+  VIEW_MOVERS:'🚀', DEFAULT:'📌'
+};
+const ACT_COLORS = {
+  LOGIN:'var(--teal-dim)', REGISTER:'var(--gain-dim)', ADD_WATCHLIST:'rgba(245,158,11,.12)',
+  REMOVE_WATCHLIST:'var(--loss-dim)', DEFAULT:'var(--surface)'
+};
+
+function renderActivity(acts) {
+  document.getElementById('actCount').textContent = `${acts.length} events`;
+  if (!acts.length) {
+    document.getElementById('activityFeed').innerHTML = '<div style="color:var(--t2);font-size:13px;text-align:center;padding:16px">No activity yet</div>';
+    return;
+  }
+  document.getElementById('activityFeed').innerHTML = acts.map(a => {
+    const icon  = ACT_ICONS[a.action] || ACT_ICONS.DEFAULT;
+    const color = ACT_COLORS[a.action] || ACT_COLORS.DEFAULT;
+    const time  = new Date(a.timestamp).toLocaleString('en-PK',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+    return `<div class="activity-item">
+      <div class="act-icon" style="background:${color}">${icon}</div>
+      <div>
+        <div class="act-action">${a.action.replace(/_/g,' ')}</div>
+        <div class="act-detail">${a.detail || ''}</div>
+        <div class="act-time">${time}</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CHART
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadChart(sym, period) {
+  document.getElementById('chartTitle').textContent = `${sym} — loading...`;
+  try {
+    const h = await get(`/stocks/${sym}/history?period=${period}`);
+    const labels = h.data.map(p => p.date);
+    const prices = h.data.map(p => p.price);
+    const isUp   = prices.at(-1) >= prices[0];
+    const color  = isUp ? '#22c55e' : '#ef4444';
+
+    document.getElementById('chartTitle').textContent = `${sym} price history`;
+    document.getElementById('chartSub').textContent   = `${period} · PSX data`;
+
+    if (chart) chart.destroy();
+    const ctx = document.getElementById('priceChart').getContext('2d');
+    chart = new Chart(ctx, {
+      type: 'line',
+      data: { labels, datasets: [{
+        data: prices, borderColor: color, borderWidth: 2,
+        pointRadius: 0, pointHoverRadius: 5, pointHoverBackgroundColor: color,
+        fill: true,
+        backgroundColor: ctx2 => {
+          const g = ctx2.chart.ctx.createLinearGradient(0,0,0,220);
+          g.addColorStop(0, color+'30'); g.addColorStop(1, color+'00'); return g;
+        },
+        tension: 0.4
+      }]},
+      options: {
+        responsive: true, maintainAspectRatio: false,
+        interaction: { mode:'index', intersect:false },
+        plugins: { legend:{ display:false }, tooltip:{ callbacks:{ label: v => ` PKR ${fmt(v.raw)}` }}},
+        scales: {
+          x: { grid:{ color:'rgba(255,255,255,.04)' }, ticks:{ color:'#64748b', font:{size:11}, maxTicksLimit:7, maxRotation:0 }},
+          y: { grid:{ color:'rgba(255,255,255,.04)' }, ticks:{ color:'#64748b', font:{size:11}, callback: v => fmt(v,0) }, min: Math.min(...prices)*.995 }
+        }
+      }
+    });
+  } catch(e) {
+    document.getElementById('chartTitle').textContent = 'Chart unavailable';
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// INTERACTIONS
+// ═══════════════════════════════════════════════════════════════════════════
+async function selectStock(sym) {
+  selectedSym = sym;
+  renderWatchlist(allQuotes);
+  const q = allQuotes.find(s => s.symbol === sym);
+  if (q) renderDetail(q);
+  await loadChart(sym, currentPeriod);
+}
+
+function setPeriod(p, btn) {
+  currentPeriod = p;
+  document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+  btn.classList.add('active');
+  if (selectedSym) loadChart(selectedSym, p);
+}
+
+async function toggleWatchlist(e, sym, isIn) {
+  e.stopPropagation();
+  try {
+    if (isIn) {
+      await del(`/watchlist/${sym}`);
+      showToast(`${sym} removed from watchlist`, 'var(--loss)');
+    } else {
+      await post(`/watchlist/${sym}`);
+      showToast(`${sym} added to watchlist ⭐`);
+    }
+    // refresh quotes to update in_watchlist flags
+    allQuotes = await get('/stocks');
+    renderWatchlist(allQuotes);
+    loadActivity();
+  } catch(e) {
+    showToast(e.message, 'var(--loss)');
+  }
+}
+
+async function loadActivity() {
+  try {
+    const acts = await get('/activity?limit=30');
+    renderActivity(acts);
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// MAIN LOAD
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadAll() {
+  try {
+    const [summary, quotes, sectors] = await Promise.all([
+      get('/market/summary'),
+      get('/stocks'),
+      get('/market/sectors'),
+    ]);
+    allQuotes = quotes;
+    renderMetrics(summary);
+    renderTicker(quotes);
+    renderWatchlist(quotes);
+    renderSectors(sectors);
+
+    if (!selectedSym && quotes.length) {
+      selectedSym = quotes[0].symbol;
+      renderDetail(quotes[0]);
+      await loadChart(selectedSym, currentPeriod);
+    }
+    loadActivity();
+  } catch(e) {
+    if (e.message.includes('401') || e.message.toLowerCase().includes('token')) {
+      doLogout();
+    }
+    console.error(e);
+  }
+}
+
+function showApp() {
+  showScreen('app');
+  document.getElementById('userLabel').textContent  = me?.username || '—';
+  document.getElementById('userAvatar').textContent = (me?.username || '?')[0].toUpperCase();
+  loadAll();
+  setInterval(loadAll, 5 * 60 * 1000);   // auto-refresh every 5 min
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// BOOT
+// ═══════════════════════════════════════════════════════════════════════════
+if (token && me) {
+  showApp();
+} else {
+  showScreen('login');
+}
+
+// Enter key on login
+document.getElementById('loginPass').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+document.getElementById('loginEmail').addEventListener('keydown', e => { if (e.key==='Enter') doLogin(); });
+</script>
+</body>
+</html>
