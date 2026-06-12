@@ -1,49 +1,47 @@
 # services/psx_scraper.py
-# Fetches live data from the official PSX data portal: dps.psx.com.pk
 #
-# PSX doesn't provide a public JSON API, so we scrape their website.
-# All data comes directly from Pakistan Stock Exchange's own portal.
+# Data source: hamariweb.com — a free, public Pakistani finance portal that
+# publishes a full live PSX table (LDCP, Open, High, Low, Current, Change, Volume)
+# organized by sector, refreshed every ~5 minutes. No API key, no auth.
 #
-# Endpoints used:
-#   https://dps.psx.com.pk/quotes          → live quotes for all symbols
-#   https://dps.psx.com.pk/data/index       → KSE-100 index value
-#   https://dps.psx.com.pk/timeseries/{sym} → historical price data
+# URL: https://hamariweb.com/finance/stockexchanges/kse.aspx
+#
+# Fallback chain:
+#   1. hamariweb.com live table (real PSX data)
+#   2. Seeded mock data (consistent per day) — used only if the site is unreachable
 
+import re
 import httpx
-from bs4 import BeautifulSoup
+import cloudscraper
 from datetime import datetime, timedelta
 import random
-import json
 from services.cache import stock_cache
 
+HAMARIWEB_URL = "https://hamariweb.com/finance/stockexchanges/kse.aspx"
 
-# ── Headers that mimic a real browser ───────────────────────────────────────
-# PSX blocks requests without a proper User-Agent
 HEADERS = {
-    "User-Agent": (
-        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
-        "AppleWebKit/537.36 (KHTML, like Gecko) "
-        "Chrome/124.0.0.0 Safari/537.36"
-    ),
+    "User-Agent": ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+                    "(KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"),
     "Accept": "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8",
-    "Accept-Language": "en-US,en;q=0.5",
-    "Referer": "https://dps.psx.com.pk/",
+    "Accept-Language": "en-US,en;q=0.9",
 }
 
-# ── Known PSX stocks with metadata ──────────────────────────────────────────
+
+# ── Stock registry ─────────────────────────────────────────────────────────
+# "match" = the display name used on hamariweb (used to find the row)
 KNOWN_STOCKS: dict[str, dict] = {
-    "OGDC":   {"name": "Oil & Gas Development Co.", "sector": "Energy"},
-    "PSO":    {"name": "Pakistan State Oil",         "sector": "Energy"},
-    "PPL":    {"name": "Pakistan Petroleum Ltd.",    "sector": "Energy"},
-    "LUCK":   {"name": "Lucky Cement",               "sector": "Cement"},
-    "MLCF":   {"name": "Maple Leaf Cement",          "sector": "Cement"},
-    "MCB":    {"name": "MCB Bank",                   "sector": "Banking"},
-    "HBL":    {"name": "Habib Bank Limited",         "sector": "Banking"},
-    "UBL":    {"name": "United Bank Limited",        "sector": "Banking"},
-    "ENGRO":  {"name": "Engro Corporation",          "sector": "Conglomerate"},
-    "FFC":    {"name": "Fauji Fertilizer Co.",       "sector": "Fertilizer"},
-    "HUBC":   {"name": "Hub Power Company",          "sector": "Power"},
-    "TRG":    {"name": "TRG Pakistan",               "sector": "Technology"},
+    "OGDC":  {"name": "Oil & Gas Development Co.", "sector": "Energy",        "match": "OGDC"},
+    "PSO":   {"name": "Pakistan State Oil",         "sector": "Energy",        "match": "PSO"},
+    "PPL":   {"name": "Pakistan Petroleum Ltd.",    "sector": "Energy",        "match": "PPL"},
+    "LUCK":  {"name": "Lucky Cement",               "sector": "Cement",        "match": "Lucky Cement"},
+    "MLCF":  {"name": "Maple Leaf Cement",          "sector": "Cement",        "match": "Maple Leaf"},
+    "MCB":   {"name": "MCB Bank",                   "sector": "Banking",       "match": "MCB Bank"},
+    "HBL":   {"name": "Habib Bank Ltd.",            "sector": "Banking",       "match": "HBL"},
+    "UBL":   {"name": "United Bank Limited",        "sector": "Banking",       "match": "UBL"},
+    "ENGRO": {"name": "Engro Corporation",          "sector": "Conglomerate",  "match": "ENGROH"},
+    "FFC":   {"name": "Fauji Fertilizer Co.",       "sector": "Fertilizer",    "match": "FFC"},
+    "HUBC":  {"name": "Hub Power Company",          "sector": "Power",         "match": "HUBC"},
+    "TRG":   {"name": "TRG Pakistan",               "sector": "Technology",   "match": "TRG"},
 }
 
 SECTOR_DATA = [
@@ -57,201 +55,196 @@ SECTOR_DATA = [
     {"sector": "Other",        "weight_pct":  2.0},
 ]
 
+# Realistic fallback prices (PKR)
+BASE_PRICES = {
+    "OGDC": 320.0, "PSO": 350.0, "PPL": 225.0, "LUCK": 475.0,
+    "MLCF": 106.0, "MCB": 245.0, "HBL": 315.0, "UBL": 400.0,
+    "ENGRO": 260.0,"FFC": 555.0, "HUBC": 213.0, "TRG":  70.0,
+}
 
-# ── PSX scraper ───────────────────────────────────────────────────────────────
+KSE100_BASE = 156000.0
+
 
 def _now() -> str:
     return datetime.now().strftime("%Y-%m-%dT%H:%M:%S")
 
 
-def _scrape_all_quotes() -> dict[str, dict]:
-    """
-    Scrape live quotes from PSX.
-    PSX quotes page has a table with all listed stocks.
-    Returns a dict: { "OGDC": {price, open, high, low, ...}, ... }
-    """
+# ── Scraper ──────────────────────────────────────────────────────────────────
+import time
+_table_cache: dict = {}
+_table_cache_ts: float = 0.0
+TABLE_TTL = 300  # 5 minutes — matches hamariweb's own refresh rate
+
+
+def _fetch_table_html() -> str | None:
+    """Fetch the raw HTML of the KSE live table page."""
     try:
-        with httpx.Client(headers=HEADERS, timeout=15, follow_redirects=True) as client:
-            resp = client.get("https://dps.psx.com.pk/quotes")
-            resp.raise_for_status()
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        # PSX quotes page: each row in #quotes-table tbody
-        table = soup.find("table", {"id": "quotes-table"}) or soup.find("table")
-        if not table:
-            return {}
-
-        results = {}
-        rows = table.find("tbody").find_all("tr")
-        for row in rows:
-            cols = row.find_all("td")
-            if len(cols) < 8:
-                continue
-            try:
-                sym       = cols[0].get_text(strip=True).upper()
-                ldcp      = float(cols[1].get_text(strip=True).replace(",", "") or 0)
-                open_p    = float(cols[2].get_text(strip=True).replace(",", "") or ldcp)
-                high      = float(cols[3].get_text(strip=True).replace(",", "") or ldcp)
-                low       = float(cols[4].get_text(strip=True).replace(",", "") or ldcp)
-                current   = float(cols[5].get_text(strip=True).replace(",", "") or ldcp)
-                change    = float(cols[6].get_text(strip=True).replace(",", "") or 0)
-                volume    = int(cols[7].get_text(strip=True).replace(",", "") or 0)
-                chg_pct   = round((change / ldcp) * 100, 2) if ldcp else 0.0
-
-                if sym and current > 0:
-                    results[sym] = {
-                        "price":      current,
-                        "open":       open_p,
-                        "high":       high,
-                        "low":        low,
-                        "prev_close": ldcp,
-                        "change":     round(change, 2),
-                        "change_pct": chg_pct,
-                        "volume":     volume,
-                    }
-            except (ValueError, IndexError):
-                continue
-
-        return results
-
+        scraper = cloudscraper.create_scraper()
+        r = scraper.get(HAMARIWEB_URL, headers=HEADERS, timeout=20)
+        if r.status_code == 200 and len(r.text) > 5000:
+            return r.text
     except Exception as e:
-        print(f"[PSX scraper] Quote scrape failed: {e}")
-        return {}
+        print(f"[hamariweb] cloudscraper failed: {e}")
 
-
-def _scrape_index() -> dict:
-    """
-    Scrape KSE-100 index value from PSX.
-    """
+    # Fallback to plain httpx
     try:
-        with httpx.Client(headers=HEADERS, timeout=10, follow_redirects=True) as client:
-            resp = client.get("https://dps.psx.com.pk/")
-            resp.raise_for_status()
-
-        soup = BeautifulSoup(resp.text, "html.parser")
-
-        # Look for index value in the page — PSX shows it prominently
-        index_el = (
-            soup.find("span", {"class": "index-value"}) or
-            soup.find("div",  {"class": "kse100"}) or
-            soup.find(text=lambda t: t and "KSE-100" in t)
-        )
-        if index_el:
-            val_text = index_el.get_text(strip=True).replace(",", "")
-            return {"index_value": float(val_text)}
-
+        r = httpx.get(HAMARIWEB_URL, headers=HEADERS, timeout=20, follow_redirects=True)
+        if r.status_code == 200 and len(r.text) > 5000:
+            return r.text
     except Exception as e:
-        print(f"[PSX scraper] Index scrape failed: {e}")
+        print(f"[hamariweb] httpx failed: {e}")
 
-    return {}
+    return None
 
 
-def _scrape_history(symbol: str, period: str) -> list[dict]:
+def _parse_table(html: str) -> dict[str, dict]:
     """
-    Scrape historical prices for a symbol from PSX timeseries endpoint.
+    Parse the hamariweb KSE table into { display_name: {ldcp, open, high, low, current, change, volume} }
+    Table rows look like:
+      <tr><td>Name</td><td>LDCP</td><td>Open</td><td>High</td><td>Low</td><td>Current</td><td>Change</td><td>Volume</td></tr>
+    We use regex on <tr>...</tr> blocks to avoid needing a full HTML parser.
     """
-    period_days = {"1D": 1, "1W": 7, "1M": 30, "3M": 90}
-    days = period_days.get(period, 7)
-    date_to   = datetime.now().strftime("%Y-%m-%d")
-    date_from = (datetime.now() - timedelta(days=days)).strftime("%Y-%m-%d")
+    results = {}
+    # Match each table row's cell contents
+    row_pattern = re.compile(r"<tr[^>]*>(.*?)</tr>", re.DOTALL | re.IGNORECASE)
+    cell_pattern = re.compile(r"<td[^>]*>(.*?)</td>", re.DOTALL | re.IGNORECASE)
+    tag_strip = re.compile(r"<[^>]+>")
 
-    try:
-        url = f"https://dps.psx.com.pk/timeseries/eod/{symbol}"
-        params = {"from": date_from, "to": date_to}
-        with httpx.Client(headers=HEADERS, timeout=15, follow_redirects=True) as client:
-            resp = client.get(url, params=params)
-            resp.raise_for_status()
-
-        # PSX timeseries returns JSON or HTML table depending on endpoint
+    for row_match in row_pattern.finditer(html):
+        row_html = row_match.group(1)
+        cells = cell_pattern.findall(row_html)
+        if len(cells) != 8:
+            continue
+        # Clean each cell: strip tags, whitespace, commas
+        clean = [tag_strip.sub("", c).strip().replace(",", "") for c in cells]
+        name = clean[0]
+        if not name or name.upper() in ("SCRIP",):
+            continue
         try:
-            data = resp.json()
-            # Expected: [{"date": "2024-01-15", "close": 185.5}, ...]
-            points = []
-            for row in data:
-                date_str = row.get("date", "")
-                price    = row.get("close") or row.get("price") or 0
-                if date_str and price:
-                    if period == "1D":
-                        label = date_str[11:16] if "T" in date_str else date_str
-                    elif period == "1W":
-                        label = datetime.strptime(date_str[:10], "%Y-%m-%d").strftime("%a %d")
-                    else:
-                        label = datetime.strptime(date_str[:10], "%Y-%m-%d").strftime("%b %d")
-                    points.append({"date": label, "price": round(float(price), 2)})
-            if points:
-                return points
-        except (ValueError, json.JSONDecodeError):
-            pass
+            ldcp, open_, high, low, current, change, volume = (
+                float(clean[1]), float(clean[2]), float(clean[3]),
+                float(clean[4]), float(clean[5]), float(clean[6]), int(float(clean[7]))
+            )
+        except (ValueError, IndexError):
+            continue
 
-        # Fallback: try parsing as HTML table
-        soup = BeautifulSoup(resp.text, "html.parser")
-        rows = soup.find_all("tr")
-        points = []
-        for row in rows[1:]:
-            cols = row.find_all("td")
-            if len(cols) >= 2:
-                try:
-                    date_str = cols[0].get_text(strip=True)
-                    price    = float(cols[1].get_text(strip=True).replace(",", ""))
-                    label    = datetime.strptime(date_str, "%Y-%m-%d").strftime("%b %d")
-                    points.append({"date": label, "price": round(price, 2)})
-                except (ValueError, IndexError):
-                    continue
-        if points:
-            return points
+        results[name] = {
+            "ldcp": ldcp, "open": open_, "high": high, "low": low,
+            "current": current, "change": change, "volume": volume,
+        }
 
-    except Exception as e:
-        print(f"[PSX scraper] History scrape failed for {symbol}: {e}")
-
-    return []
+    return results
 
 
-# ── Mock fallback ─────────────────────────────────────────────────────────────
-# Used when PSX website is unreachable (off-hours, maintenance, etc.)
-# Data is realistic for Pakistani market but not live.
+def _get_live_table() -> dict[str, dict]:
+    """Cache the parsed table for TABLE_TTL seconds."""
+    global _table_cache, _table_cache_ts
+    if _table_cache and (time.time() - _table_cache_ts) < TABLE_TTL:
+        return _table_cache
 
-def _mock_quote(symbol: str) -> dict:
-    meta   = KNOWN_STOCKS.get(symbol, {"name": f"{symbol} Ltd.", "sector": "Unknown"})
-    random.seed(hash(symbol) % 9999)          # same seed per symbol = stable mock
-    base   = round(random.uniform(80, 900), 2)
-    prev   = round(base * random.uniform(0.97, 1.03), 2)
-    chg    = round(base - prev, 2)
+    html = _fetch_table_html()
+    if not html:
+        return _table_cache  # return stale cache if fetch failed, else {}
+
+    parsed = _parse_table(html)
+    if parsed:
+        _table_cache = parsed
+        _table_cache_ts = time.time()
+        print(f"[hamariweb] parsed {len(parsed)} rows")
+    return _table_cache
+
+
+def _find_row(table: dict, match_name: str) -> dict | None:
+    """Find a stock row by partial, case-insensitive name match."""
+    match_lower = match_name.lower()
+    # Exact match first
+    for name, row in table.items():
+        if name.lower() == match_lower:
+            return row
+    # Then "starts with"
+    for name, row in table.items():
+        if name.lower().startswith(match_lower):
+            return row
+    # Then "contains"
+    for name, row in table.items():
+        if match_lower in name.lower():
+            return row
+    return None
+
+
+def _build_quote_from_row(symbol: str, row: dict) -> dict:
+    meta  = KNOWN_STOCKS[symbol]
+    price = row["current"]
+    prev  = row["ldcp"]
+    chg   = round(row["change"], 2)
+    chg_pct = round((chg / prev) * 100, 2) if prev else 0.0
     return {
         "symbol":       symbol,
         "company_name": meta["name"],
         "sector":       meta["sector"],
-        "price":        base,
-        "open":         round(prev * random.uniform(0.99, 1.01), 2),
-        "high":         round(base * 1.015, 2),
-        "low":          round(base * 0.985, 2),
-        "prev_close":   prev,
+        "price":        round(price, 2),
+        "open":         round(row["open"], 2),
+        "high":         round(row["high"], 2),
+        "low":          round(row["low"], 2),
+        "prev_close":   round(prev, 2),
         "change":       chg,
-        "change_pct":   round((chg / prev) * 100, 2) if prev else 0,
-        "volume":       random.randint(300_000, 8_000_000),
+        "change_pct":   chg_pct,
+        "volume":       row["volume"],
         "last_updated": _now(),
+        "source":       "hamariweb",
     }
 
 
-def _mock_history(symbol: str, period: str) -> list[dict]:
+# ── Mock fallback ──────────────────────────────────────────────────────────
+
+def _mock_quote(symbol: str) -> dict:
+    meta  = KNOWN_STOCKS.get(symbol, {"name": f"{symbol} Ltd.", "sector": "Unknown"})
+    base  = BASE_PRICES.get(symbol, 200.0)
+    seed  = int(datetime.now().strftime("%Y%m%d")) + abs(hash(symbol)) % 10000
+    rng   = random.Random(seed)
+    price = round(base * rng.uniform(0.97, 1.03), 2)
+    prev  = round(base * rng.uniform(0.97, 1.03), 2)
+    chg   = round(price - prev, 2)
+    return {
+        "symbol":       symbol,
+        "company_name": meta["name"],
+        "sector":       meta["sector"],
+        "price":        price,
+        "open":         round(prev * rng.uniform(0.998, 1.002), 2),
+        "high":         round(max(price, prev) * rng.uniform(1.005, 1.015), 2),
+        "low":          round(min(price, prev) * rng.uniform(0.985, 0.995), 2),
+        "prev_close":   prev,
+        "change":       chg,
+        "change_pct":   round((chg / prev) * 100, 2) if prev else 0.0,
+        "volume":       rng.randint(500_000, 9_000_000),
+        "last_updated": _now(),
+        "source":       "simulated",
+    }
+
+
+def _mock_history(symbol: str, period: str, anchor_price: float | None = None) -> list[dict]:
+    base   = anchor_price or BASE_PRICES.get(symbol, 200.0)
+    seed   = int(datetime.now().strftime("%Y%m%d")) + abs(hash(symbol + period)) % 10000
+    rng    = random.Random(seed)
     counts = {"1D": 48, "1W": 35, "1M": 22, "3M": 60}
     n      = counts.get(period, 30)
-    random.seed(hash(symbol + period) % 9999)
-    price  = random.uniform(100, 600)
+    price  = base * rng.uniform(0.93, 1.07)
     points = []
     for i in range(n):
-        price = round(price * random.uniform(0.993, 1.007), 2)
+        price = round(price * rng.uniform(0.994, 1.006), 2)
         if period == "1D":
-            label = f"{9 + i//12:02d}:{(i%12)*5:02d}"
+            label = f"{9 + i//12:02d}:{(i % 12)*5:02d}"
         elif period == "1W":
-            label = (datetime.now() - timedelta(days=n-i)).strftime("%a %d")
+            label = (datetime.now() - timedelta(days=n - i)).strftime("%a %d")
         else:
-            label = (datetime.now() - timedelta(days=n-i)).strftime("%b %d")
+            label = (datetime.now() - timedelta(days=n - i)).strftime("%b %d")
         points.append({"date": label, "price": price})
+    if anchor_price:
+        points[-1]["price"] = round(anchor_price, 2)
     return points
 
 
-# ── Public API (called by routers) ────────────────────────────────────────────
+# ── Public API ─────────────────────────────────────────────────────────────
 
 def get_stock_quote(symbol: str) -> dict:
     symbol = symbol.upper()
@@ -259,46 +252,34 @@ def get_stock_quote(symbol: str) -> dict:
     if cached:
         return cached
 
-    # Try live PSX data first
-    all_live = stock_cache.get("__all_quotes__")
-    if not all_live:
-        all_live = _scrape_all_quotes()
-        if all_live:
-            stock_cache.set("__all_quotes__", all_live)
+    meta  = KNOWN_STOCKS[symbol]
+    table = _get_live_table()
+    row   = _find_row(table, meta["match"]) if table else None
 
-    meta = KNOWN_STOCKS.get(symbol, {"name": f"{symbol} Ltd.", "sector": "Unknown"})
-
-    if symbol in (all_live or {}):
-        live  = all_live[symbol]
-        quote = {
-            "symbol":       symbol,
-            "company_name": meta["name"],
-            "sector":       meta["sector"],
-            "last_updated": _now(),
-            **live,
-        }
-    else:
-        # Graceful fallback to mock
-        quote = _mock_quote(symbol)
-
-    stock_cache.set(symbol, quote)
-    return quote
+    data = _build_quote_from_row(symbol, row) if row else _mock_quote(symbol)
+    stock_cache.set(symbol, data)
+    return data
 
 
 def get_all_quotes() -> list[dict]:
+    _get_live_table()   # pre-warm: one HTTP request covers every symbol
     return [get_stock_quote(sym) for sym in KNOWN_STOCKS]
 
 
 def get_stock_history(symbol: str, period: str) -> dict:
+    """
+    hamariweb's table is a live snapshot only — no history endpoint.
+    History is simulated but anchored to today's real live price.
+    """
     symbol    = symbol.upper()
     cache_key = f"history:{symbol}:{period}"
     cached    = stock_cache.get(cache_key)
     if cached:
         return cached
 
-    points = _scrape_history(symbol, period)
-    if not points:
-        points = _mock_history(symbol, period)
+    quote  = get_stock_quote(symbol)
+    anchor = quote["price"] if quote.get("source") == "hamariweb" else None
+    points = _mock_history(symbol, period, anchor_price=anchor)
 
     result = {"symbol": symbol, "period": period, "data": points}
     stock_cache.set(cache_key, result)
@@ -319,14 +300,32 @@ def get_market_summary(quotes: list[dict] = None) -> dict:
     unchanged = len(quotes) - advancers - decliners
     total_vol = sum(q["volume"] for q in quotes)
 
-    # Try to get live index value
-    index_data = _scrape_index()
-    index_val  = index_data.get("index_value", 71842.0)
+    # Try to find KSE-100 index row in the live table
+    table = _get_live_table()
+    index_val = KSE100_BASE
+    index_chg = 0.0
+    index_pct = 0.0
+    idx_row = None
+    for name in ("KSE-100", "KSE 100", "PSX 100", "KSE100"):
+        idx_row = _find_row(table, name)
+        if idx_row:
+            break
+
+    if idx_row:
+        index_val = round(idx_row["current"], 2)
+        index_chg = round(idx_row["change"], 1)
+        index_pct = round((index_chg / idx_row["ldcp"]) * 100, 2) if idx_row["ldcp"] else 0.0
+    else:
+        seed     = int(datetime.now().strftime("%Y%m%d"))
+        rng      = random.Random(seed)
+        prev_idx = index_val * rng.uniform(0.988, 1.012)
+        index_chg = round(index_val - prev_idx, 1)
+        index_pct = round((index_chg / prev_idx) * 100, 2) if prev_idx else 0.0
 
     summary = {
         "index_value":      index_val,
-        "index_change":     round(index_val * 0.0124, 1),
-        "index_change_pct": 1.24,
+        "index_change":     index_chg,
+        "index_change_pct": index_pct,
         "total_volume":     total_vol,
         "advancers":        advancers,
         "decliners":        decliners,
@@ -339,12 +338,9 @@ def get_market_summary(quotes: list[dict] = None) -> dict:
 
 def get_sector_weights() -> list[dict]:
     quotes = get_all_quotes()
-    # Attach a live change_pct per sector based on average of stocks in that sector
     sector_changes: dict[str, list[float]] = {}
     for q in quotes:
-        s = q["sector"]
-        sector_changes.setdefault(s, []).append(q["change_pct"])
-
+        sector_changes.setdefault(q["sector"], []).append(q["change_pct"])
     result = []
     for row in SECTOR_DATA:
         changes = sector_changes.get(row["sector"], [0.0])
