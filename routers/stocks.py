@@ -33,6 +33,41 @@ def list_symbols():
     return list(KNOWN_STOCKS.keys())
 
 
+@router.get("/search")
+def search_stocks(
+    q: str = Query(default="", description="Search by symbol or company name"),
+    sector: str = Query(default="", description="Filter by sector"),
+    sort_by: str = Query(default="symbol", enum=["symbol", "price", "change_pct", "volume"]),
+    order: str = Query(default="asc", enum=["asc", "desc"]),
+    db: Session = Depends(get_db),
+    current_user=Depends(get_current_user),
+):
+    """
+    GET /stocks/search?q=ogdc&sector=Energy&sort_by=change_pct&order=desc
+    Search tracked stocks by symbol/name, filter by sector, sort by any field.
+    """
+    quotes = get_all_quotes()
+
+    if q:
+        q_lower = q.lower()
+        quotes = [
+            stock for stock in quotes
+            if q_lower in stock["symbol"].lower() or q_lower in stock["company_name"].lower()
+        ]
+
+    if sector:
+        quotes = [stock for stock in quotes if stock["sector"].lower() == sector.lower()]
+
+    reverse = (order == "desc")
+    quotes.sort(key=lambda s: s[sort_by], reverse=reverse)
+
+    watchlist_syms = {w.symbol for w in crud.get_watchlist(db, current_user.id)}
+    for stock in quotes:
+        stock["in_watchlist"] = stock["symbol"] in watchlist_syms
+
+    return quotes
+
+
 @router.get("/{symbol}", response_model=StockQuote)
 def get_stock(
     symbol: str,

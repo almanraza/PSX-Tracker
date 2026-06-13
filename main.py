@@ -1,21 +1,49 @@
 # main.py
-# App entry point. Everything is wired together here.
-# Run with: uvicorn main:app --reload
+# App entry point. Run with: uvicorn main:app --reload
 
-from fastapi import FastAPI
+from contextlib import asynccontextmanager
+from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+
 from database.db import init_db
-from routers import auth, stocks, market, watchlist, activity
+from services.scheduler import start_scheduler, stop_scheduler
+from routers import auth, stocks, market, watchlist, activity, portfolio, alerts, admin, ws
+
+
+# ── Rate limiter ─────────────────────────────────────────────────────────────
+# Limits requests per IP address. Protects the PSX scraper from abuse
+# and keeps the free Railway instance from being overwhelmed.
+limiter = Limiter(key_func=get_remote_address, default_limits=["120/minute"])
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # --- startup ---
+    init_db()
+    print("✓ Database tables ready")
+    start_scheduler()
+    print("✓ PSX Tracker API is live")
+    yield
+    # --- shutdown ---
+    stop_scheduler()
+
 
 app = FastAPI(
     title="PSX Stock Tracker API",
-    description="Pakistan Stock Exchange tracker with auth, watchlists, and activity logging.",
-    version="2.0.0",
+    description="Pakistan Stock Exchange tracker with auth, portfolio simulator, alerts, and live updates.",
+    version="3.0.0",
+    lifespan=lifespan,
 )
 
-# CORS — allows the browser dashboard to call the API
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
+# CORS — lets the browser dashboard call the API from any origin
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -23,14 +51,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Wire in all routers
+# Routers
 app.include_router(auth.router)
 app.include_router(stocks.router)
 app.include_router(market.router)
 app.include_router(watchlist.router)
 app.include_router(activity.router)
+app.include_router(portfolio.router)
+app.include_router(alerts.router)
+app.include_router(admin.router)
+app.include_router(ws.router)
 
-# Serve the frontend at /
+# Serve the static dashboard at /
 app.mount("/static", StaticFiles(directory="static"), name="static")
 
 @app.get("/", include_in_schema=False)
@@ -39,17 +71,8 @@ def serve_dashboard():
 
 @app.get("/health", tags=["System"])
 def health():
-    return {"status": "ok", "version": "2.0.0"}
+    return {"status": "ok", "version": "3.0.0"}
 
-# Create DB tables on startup
-@app.on_event("startup")
-def startup():
-    init_db()
-    print("✓ Database ready")
-    print("✓ PSX Tracker API running at http://localhost:8000")
-    print("✓ API docs at http://localhost:8000/docs")
 if __name__ == "__main__":
     import uvicorn
-    import os
-    port = int(os.environ.get("PORT", 8000))
-    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

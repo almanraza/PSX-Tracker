@@ -124,3 +124,112 @@ class ActivityItem(BaseModel):
     detail:    Optional[str]
     timestamp: datetime
     model_config = {"from_attributes": True}
+
+
+# ── Portfolio / Trading ──────────────────────────────────────────────────────
+
+class OrderRequest(BaseModel):
+    """Body for POST /portfolio/buy and /portfolio/sell"""
+    symbol:   str
+    quantity: int
+
+    @field_validator("quantity")
+    @classmethod
+    def quantity_positive(cls, v):
+        if v <= 0:
+            raise ValueError("Quantity must be greater than 0")
+        return v
+
+
+class HoldingItem(BaseModel):
+    symbol:       str
+    company_name: str
+    quantity:     int
+    avg_cost:     float
+    current_price: float
+    market_value: float
+    gain_loss:    float
+    gain_loss_pct: float
+
+
+class PortfolioSummary(BaseModel):
+    cash_balance:  float
+    holdings_value: float
+    total_value:   float
+    total_gain_loss: float
+    total_gain_loss_pct: float
+    holdings:      list[HoldingItem]
+
+
+class TransactionItem(BaseModel):
+    symbol:    str
+    action:    str
+    quantity:  int
+    price:     float
+    total:     float
+    timestamp: datetime
+    model_config = {"from_attributes": True}
+
+
+# ── Price Alerts ──────────────────────────────────────────────────────────────
+
+class AlertRequest(BaseModel):
+    """Body for POST /alerts"""
+    symbol:       str
+    target_price: float
+    direction:    str   # "ABOVE" | "BELOW"
+
+    @field_validator("direction")
+    @classmethod
+    def direction_valid(cls, v):
+        v = v.upper()
+        if v not in ("ABOVE", "BELOW"):
+            raise ValueError("direction must be 'ABOVE' or 'BELOW'")
+        return v
+
+    @field_validator("target_price")
+    @classmethod
+    def price_positive(cls, v):
+        if v <= 0:
+            raise ValueError("target_price must be greater than 0")
+        return v
+
+
+class AlertItem(BaseModel):
+    id:           int
+    symbol:       str
+    target_price: float
+    direction:    str
+    triggered:    bool
+    created_at:   datetime
+    model_config = {"from_attributes": True}
+
+
+# ── Notifications ─────────────────────────────────────────────────────────────
+
+class NotificationItem(BaseModel):
+    id:         int
+    message:    str
+    read:       bool
+    created_at: datetime
+    model_config = {"from_attributes": True}
+
+
+# ── Admin ─────────────────────────────────────────────────────────────────────
+
+class PlatformStats(BaseModel):
+    total_users: int
+    total_transactions: int
+    total_activity_events: int
+    total_alerts: int
+
+
+class AdminUserItem(BaseModel):
+    id:         int
+    username:   str
+    email:      str
+    full_name:  str
+    is_active:  bool
+    created_at: datetime
+    model_config = {"from_attributes": True}
+

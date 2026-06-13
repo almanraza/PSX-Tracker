@@ -144,8 +144,69 @@ body{background:var(--bg);color:var(--t1);font-family:'Inter','Segoe UI',system-
 .toast{position:fixed;bottom:24px;right:24px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:12px 18px;font-size:13px;box-shadow:0 8px 32px rgba(0,0,0,.4);z-index:9999;display:none;animation:slideup .2s ease}
 @keyframes slideup{from{transform:translateY(12px);opacity:0}to{transform:translateY(0);opacity:1}}
 
-/* ── Scrollbar ── */
-::-webkit-scrollbar{width:4px}::-webkit-scrollbar-thumb{background:var(--border);border-radius:4px}
+/* ── Page tabs (Dashboard / Portfolio / Alerts) ── */
+.page-tabs{display:flex;gap:6px;margin-bottom:18px;border-bottom:1px solid var(--border)}
+.page-tab{padding:10px 18px;font-size:13px;font-weight:600;color:var(--t2);background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;transition:all .15s}
+.page-tab.active{color:var(--teal);border-bottom-color:var(--teal)}
+.page-tab:hover:not(.active){color:var(--t3)}
+.page{display:none}
+.page.active{display:block}
+
+/* ── Search bar ── */
+.search-bar{display:flex;gap:8px;margin-bottom:14px}
+.search-input{flex:1;padding:10px 14px;background:var(--card);border:1px solid var(--border);border-radius:var(--rs);color:var(--t1);font-size:13px;outline:none}
+.search-input:focus{border-color:var(--teal)}
+.search-select{padding:10px 12px;background:var(--card);border:1px solid var(--border);border-radius:var(--rs);color:var(--t3);font-size:13px;outline:none;cursor:pointer}
+
+/* ── Notification bell ── */
+.bell-wrap{position:relative;cursor:pointer}
+.bell-btn{background:var(--card);border:1px solid var(--border);color:var(--t3);width:34px;height:34px;border-radius:var(--rs);display:grid;place-items:center;font-size:16px;cursor:pointer;transition:all .15s}
+.bell-btn:hover{border-color:var(--teal);color:var(--teal)}
+.bell-badge{position:absolute;top:-4px;right:-4px;background:var(--loss);color:#fff;font-size:10px;font-weight:700;border-radius:99px;min-width:16px;height:16px;display:flex;align-items:center;justify-content:center;padding:0 4px}
+.notif-dropdown{position:absolute;top:42px;right:0;width:320px;background:var(--card);border:1px solid var(--border);border-radius:var(--r);box-shadow:0 12px 32px rgba(0,0,0,.4);z-index:1000;max-height:380px;overflow-y:auto;display:none}
+.notif-dropdown.open{display:block}
+.notif-hdr{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;border-bottom:1px solid var(--border);font-size:13px;font-weight:600}
+.notif-hdr a{font-size:11px;color:var(--teal);cursor:pointer;font-weight:500}
+.notif-item{padding:10px 14px;border-bottom:1px solid var(--border);font-size:12px;display:flex;gap:8px}
+.notif-item:last-child{border-bottom:none}
+.notif-item.unread{background:var(--teal-dim)}
+.notif-dot{width:6px;height:6px;border-radius:50%;background:var(--teal);margin-top:5px;flex-shrink:0}
+.notif-msg{color:var(--t1)}
+.notif-time{color:var(--t2);font-size:11px;margin-top:2px}
+.notif-empty{padding:24px;text-align:center;color:var(--t2);font-size:13px}
+
+/* ── Portfolio ── */
+.pf-summary{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;margin-bottom:18px}
+.pf-card{background:var(--card);border:1px solid var(--border);border-radius:var(--r);padding:16px 18px}
+.pf-label{font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:.6px;margin-bottom:8px}
+.pf-value{font-size:22px;font-weight:700;color:var(--t1)}
+
+.holdings-table{width:100%;border-collapse:collapse;font-size:13px}
+.holdings-table th{text-align:left;font-size:11px;color:var(--t2);text-transform:uppercase;letter-spacing:.5px;padding:8px 10px;border-bottom:1px solid var(--border)}
+.holdings-table td{padding:10px;border-bottom:1px solid var(--border)}
+.holdings-table tr:last-child td{border-bottom:none}
+.holdings-table .sym-cell{font-weight:600;color:var(--t1)}
+.holdings-table .name-cell{font-size:11px;color:var(--t2)}
+
+/* ── Trade panel ── */
+.trade-panel{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap}
+.trade-field{flex:1;min-width:120px}
+.trade-field label{display:block;font-size:11px;color:var(--t2);margin-bottom:6px;text-transform:uppercase;letter-spacing:.5px}
+.btn-buy{background:var(--gain);color:#fff;border:none;padding:10px 24px;border-radius:var(--rs);font-weight:600;font-size:13px;cursor:pointer;transition:opacity .15s}
+.btn-sell{background:var(--loss);color:#fff;border:none;padding:10px 24px;border-radius:var(--rs);font-weight:600;font-size:13px;cursor:pointer;transition:opacity .15s}
+.btn-buy:hover,.btn-sell:hover{opacity:.85}
+
+/* ── Alerts ── */
+.alert-form{display:flex;gap:10px;align-items:flex-end;flex-wrap:wrap;margin-bottom:18px}
+.alert-item{display:flex;align-items:center;justify-content:space-between;padding:12px 14px;background:var(--surface);border:1px solid var(--border);border-radius:var(--rs);margin-bottom:8px}
+.alert-info{font-size:13px}
+.alert-info b{color:var(--t1)}
+.alert-del{background:none;border:1px solid var(--loss);color:var(--loss);border-radius:var(--rs);padding:4px 10px;font-size:11px;cursor:pointer}
+.alert-del:hover{background:var(--loss-dim)}
+
+/* ── Live indicator ── */
+.live-pill.connected{color:var(--gain);border-color:rgba(34,197,94,.3)}
+.live-pill.disconnected{color:var(--t2);border-color:var(--border)}
 </style>
 </head>
 <body>
@@ -199,7 +260,14 @@ body{background:var(--bg);color:var(--t1);font-family:'Inter','Segoe UI',system-
       <div><div class="nav-title">Stock Tracker</div><div class="nav-sub">KSE-100 · Pakistan</div></div>
     </div>
     <div class="nav-right">
-      <div class="live-pill"><div class="live-dot"></div> Live</div>
+      <div class="live-pill" id="livePill"><div class="live-dot"></div> Live</div>
+      <div class="bell-wrap">
+        <div class="bell-btn" onclick="toggleNotifDropdown()">🔔<span class="bell-badge" id="bellBadge" style="display:none">0</span></div>
+        <div class="notif-dropdown" id="notifDropdown">
+          <div class="notif-hdr"><span>Notifications</span><a onclick="markAllNotifsRead()">Mark all read</a></div>
+          <div id="notifList"><div class="notif-empty">No notifications</div></div>
+        </div>
+      </div>
       <div class="user-pill">
         <div class="user-avatar" id="userAvatar">?</div>
         <span id="userLabel">—</span>
@@ -210,8 +278,31 @@ body{background:var(--bg);color:var(--t1);font-family:'Inter','Segoe UI',system-
 
   <div class="content">
 
+    <!-- Page tabs -->
+    <div class="page-tabs">
+      <button class="page-tab active" onclick="switchPage('dashboard',this)">Dashboard</button>
+      <button class="page-tab" onclick="switchPage('portfolio',this)">Portfolio</button>
+      <button class="page-tab" onclick="switchPage('alerts',this)">Alerts</button>
+    </div>
+
+    <!-- ═══════════════ DASHBOARD PAGE ═══════════════ -->
+    <div id="page-dashboard" class="page active">
     <!-- Ticker -->
     <div class="ticker-wrap"><div class="ticker-inner" id="ticker">Loading...</div></div>
+
+    <!-- Search -->
+    <div class="search-bar">
+      <input class="search-input" id="searchInput" placeholder="Search by symbol or company name..." oninput="onSearchInput()"/>
+      <select class="search-select" id="sectorFilter" onchange="onSearchInput()">
+        <option value="">All Sectors</option>
+      </select>
+      <select class="search-select" id="sortBy" onchange="onSearchInput()">
+        <option value="symbol">Symbol</option>
+        <option value="price">Price</option>
+        <option value="change_pct">% Change</option>
+        <option value="volume">Volume</option>
+      </select>
+    </div>
 
     <!-- Metrics -->
     <div class="metrics">
@@ -271,6 +362,92 @@ body{background:var(--bg);color:var(--t1);font-family:'Inter','Segoe UI',system-
       </div>
     </div>
 
+    </div><!-- /page-dashboard -->
+
+    <!-- ═══════════════ PORTFOLIO PAGE ═══════════════ -->
+    <div id="page-portfolio" class="page">
+
+      <div class="pf-summary">
+        <div class="pf-card"><div class="pf-label">Cash Balance</div><div class="pf-value" id="pfCash">—</div></div>
+        <div class="pf-card"><div class="pf-label">Holdings Value</div><div class="pf-value" id="pfHoldings">—</div></div>
+        <div class="pf-card"><div class="pf-label">Total Value</div><div class="pf-value" id="pfTotal">—</div></div>
+        <div class="pf-card"><div class="pf-label">Total P&amp;L</div><div class="pf-value" id="pfPnl">—</div></div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-hdr"><div class="card-title">Place Order</div></div>
+        <div class="trade-panel">
+          <div class="trade-field">
+            <label>Symbol</label>
+            <select class="search-select" id="tradeSymbol" style="width:100%"></select>
+          </div>
+          <div class="trade-field">
+            <label>Quantity</label>
+            <input class="form-input" id="tradeQty" type="number" min="1" value="1" style="padding:10px 14px"/>
+          </div>
+          <div class="trade-field">
+            <label>Live Price</label>
+            <div class="form-input" id="tradePrice" style="padding:10px 14px;color:var(--t3)">—</div>
+          </div>
+          <button class="btn-buy" onclick="placeOrder('buy')">Buy</button>
+          <button class="btn-sell" onclick="placeOrder('sell')">Sell</button>
+        </div>
+      </div>
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-hdr"><div class="card-title">Holdings</div></div>
+        <div style="overflow-x:auto">
+          <table class="holdings-table">
+            <thead><tr><th>Stock</th><th>Qty</th><th>Avg Cost</th><th>Current</th><th>Market Value</th><th>P&amp;L</th></tr></thead>
+            <tbody id="holdingsBody"><tr><td colspan="6" style="text-align:center;color:var(--t2)">No holdings yet</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Transaction History</div></div>
+        <div style="overflow-x:auto">
+          <table class="holdings-table">
+            <thead><tr><th>Date</th><th>Action</th><th>Symbol</th><th>Qty</th><th>Price</th><th>Total</th></tr></thead>
+            <tbody id="txBody"><tr><td colspan="6" style="text-align:center;color:var(--t2)">No transactions yet</td></tr></tbody>
+          </table>
+        </div>
+      </div>
+
+    </div><!-- /page-portfolio -->
+
+    <!-- ═══════════════ ALERTS PAGE ═══════════════ -->
+    <div id="page-alerts" class="page">
+
+      <div class="card" style="margin-bottom:14px">
+        <div class="card-hdr"><div class="card-title">Create Price Alert</div></div>
+        <div class="alert-form">
+          <div class="trade-field">
+            <label>Symbol</label>
+            <select class="search-select" id="alertSymbol" style="width:100%"></select>
+          </div>
+          <div class="trade-field">
+            <label>Direction</label>
+            <select class="search-select" id="alertDirection" style="width:100%">
+              <option value="ABOVE">Goes Above</option>
+              <option value="BELOW">Goes Below</option>
+            </select>
+          </div>
+          <div class="trade-field">
+            <label>Target Price (PKR)</label>
+            <input class="form-input" id="alertPrice" type="number" step="0.01" min="0.01" placeholder="200.00" style="padding:10px 14px"/>
+          </div>
+          <button class="btn-primary" style="width:auto;padding:10px 24px;margin-top:0" onclick="createAlert()">Create Alert</button>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="card-hdr"><div class="card-title">Active Alerts</div></div>
+        <div id="alertsList"><div style="text-align:center;color:var(--t2);padding:16px">No active alerts</div></div>
+      </div>
+
+    </div><!-- /page-alerts -->
+
   </div><!-- /content -->
 </div><!-- /appShell -->
 
@@ -281,12 +458,16 @@ body{background:var(--bg);color:var(--t1);font-family:'Inter','Segoe UI',system-
 // CONFIG
 // ═══════════════════════════════════════════════════════════════════════════
 const API = 'http://localhost:8000';
+const WS_URL = API.replace('http', 'ws');
 let token    = localStorage.getItem('psx_token') || null;
 let me       = JSON.parse(localStorage.getItem('psx_user') || 'null');
 let chart    = null;
 let allQuotes = [];
 let selectedSym = null;
 let currentPeriod = '1W';
+let currentPage = 'dashboard';
+let ws = null;
+let searchTimer = null;
 
 // ═══════════════════════════════════════════════════════════════════════════
 // HTTP helpers
@@ -597,6 +778,7 @@ async function loadAll() {
     renderTicker(quotes);
     renderWatchlist(quotes);
     renderSectors(sectors);
+    populateSectorFilter(quotes);
 
     if (!selectedSym && quotes.length) {
       selectedSym = quotes[0].symbol;
@@ -604,6 +786,7 @@ async function loadAll() {
       await loadChart(selectedSym, currentPeriod);
     }
     loadActivity();
+    loadNotifications();
   } catch(e) {
     if (e.message.includes('401') || e.message.toLowerCase().includes('token')) {
       doLogout();
@@ -617,7 +800,311 @@ function showApp() {
   document.getElementById('userLabel').textContent  = me?.username || '—';
   document.getElementById('userAvatar').textContent = (me?.username || '?')[0].toUpperCase();
   loadAll();
-  setInterval(loadAll, 5 * 60 * 1000);   // auto-refresh every 5 min
+  connectWebSocket();
+  setInterval(loadActivity, 60 * 1000);       // refresh activity feed every minute
+  setInterval(loadNotifications, 60 * 1000);  // check for new notifications every minute
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PAGE NAVIGATION
+// ═══════════════════════════════════════════════════════════════════════════
+function switchPage(page, btn) {
+  currentPage = page;
+  document.querySelectorAll('.page-tab').forEach(t => t.classList.remove('active'));
+  document.querySelectorAll('.page').forEach(p => p.classList.remove('active'));
+  btn.classList.add('active');
+  document.getElementById(`page-${page}`).classList.add('active');
+
+  if (page === 'portfolio') loadPortfolio();
+  if (page === 'alerts')    loadAlerts();
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// SEARCH & FILTER
+// ═══════════════════════════════════════════════════════════════════════════
+function populateSectorFilter(quotes) {
+  const sel = document.getElementById('sectorFilter');
+  if (sel.options.length > 1) return; // already populated
+  const sectors = [...new Set(quotes.map(q => q.sector))].sort();
+  sectors.forEach(s => {
+    const opt = document.createElement('option');
+    opt.value = s; opt.textContent = s;
+    sel.appendChild(opt);
+  });
+}
+
+function onSearchInput() {
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(runSearch, 250);
+}
+
+async function runSearch() {
+  const q      = document.getElementById('searchInput').value.trim();
+  const sector = document.getElementById('sectorFilter').value;
+  const sortBy = document.getElementById('sortBy').value;
+
+  try {
+    const params = new URLSearchParams({ sort_by: sortBy, order: 'desc' });
+    if (q) params.set('q', q);
+    if (sector) params.set('sector', sector);
+    const results = await get(`/stocks/search?${params.toString()}`);
+    allQuotes = results;
+    renderWatchlist(results);
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// NOTIFICATIONS
+// ═══════════════════════════════════════════════════════════════════════════
+function toggleNotifDropdown() {
+  const dd = document.getElementById('notifDropdown');
+  const isOpen = dd.classList.contains('open');
+  dd.classList.toggle('open');
+  if (!isOpen) loadNotifications();
+}
+
+document.addEventListener('click', (e) => {
+  const wrap = document.querySelector('.bell-wrap');
+  if (wrap && !wrap.contains(e.target)) {
+    document.getElementById('notifDropdown')?.classList.remove('open');
+  }
+});
+
+async function loadNotifications() {
+  try {
+    const notifs = await get('/alerts/notifications?unread_only=false');
+    const unread = notifs.filter(n => !n.read).length;
+    const badge  = document.getElementById('bellBadge');
+    if (unread > 0) {
+      badge.textContent = unread > 9 ? '9+' : unread;
+      badge.style.display = 'flex';
+    } else {
+      badge.style.display = 'none';
+    }
+
+    const list = document.getElementById('notifList');
+    if (!notifs.length) {
+      list.innerHTML = '<div class="notif-empty">No notifications</div>';
+      return;
+    }
+    list.innerHTML = notifs.map(n => {
+      const time = new Date(n.created_at).toLocaleString('en-PK',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      return `<div class="notif-item ${n.read ? '' : 'unread'}">
+        <div class="notif-dot" style="${n.read ? 'background:var(--border)' : ''}"></div>
+        <div><div class="notif-msg">${n.message}</div><div class="notif-time">${time}</div></div>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function markAllNotifsRead() {
+  try {
+    await post('/alerts/notifications/read-all');
+    await loadNotifications();
+  } catch(e) {}
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// PORTFOLIO
+// ═══════════════════════════════════════════════════════════════════════════
+function populateTradeSymbolSelects() {
+  const symbols = allQuotes.map(q => q.symbol).sort();
+  ['tradeSymbol', 'alertSymbol'].forEach(id => {
+    const sel = document.getElementById(id);
+    if (sel.options.length > 0) return;
+    symbols.forEach(sym => {
+      const opt = document.createElement('option');
+      opt.value = sym; opt.textContent = sym;
+      sel.appendChild(opt);
+    });
+  });
+  updateTradePrice();
+}
+
+function updateTradePrice() {
+  const sym = document.getElementById('tradeSymbol').value;
+  const q   = allQuotes.find(s => s.symbol === sym);
+  document.getElementById('tradePrice').textContent = q ? `PKR ${fmt(q.price)}` : '—';
+}
+
+document.getElementById('tradeSymbol')?.addEventListener('change', updateTradePrice);
+
+async function loadPortfolio() {
+  try {
+    const pf = await get('/portfolio/');
+    document.getElementById('pfCash').textContent     = `PKR ${fmt(pf.cash_balance)}`;
+    document.getElementById('pfHoldings').textContent = `PKR ${fmt(pf.holdings_value)}`;
+    document.getElementById('pfTotal').textContent    = `PKR ${fmt(pf.total_value)}`;
+
+    const pnlEl = document.getElementById('pfPnl');
+    const sign  = pf.total_gain_loss >= 0 ? '+' : '';
+    pnlEl.textContent = `${sign}PKR ${fmt(pf.total_gain_loss)} (${sign}${fmt(pf.total_gain_loss_pct)}%)`;
+    pnlEl.className = `pf-value ${pf.total_gain_loss >= 0 ? 'up' : 'dn'}`;
+
+    const body = document.getElementById('holdingsBody');
+    if (!pf.holdings.length) {
+      body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--t2)">No holdings yet — place an order above</td></tr>';
+    } else {
+      body.innerHTML = pf.holdings.map(h => {
+        const cls = h.gain_loss >= 0 ? 'up' : 'dn';
+        const sgn = h.gain_loss >= 0 ? '+' : '';
+        return `<tr>
+          <td><div class="sym-cell">${h.symbol}</div><div class="name-cell">${h.company_name}</div></td>
+          <td>${h.quantity}</td>
+          <td>PKR ${fmt(h.avg_cost)}</td>
+          <td>PKR ${fmt(h.current_price)}</td>
+          <td>PKR ${fmt(h.market_value)}</td>
+          <td class="${cls}">${sgn}PKR ${fmt(h.gain_loss)} (${sgn}${fmt(h.gain_loss_pct)}%)</td>
+        </tr>`;
+      }).join('');
+    }
+
+    populateTradeSymbolSelects();
+    await loadTransactions();
+  } catch(e) {
+    console.error(e);
+  }
+}
+
+async function loadTransactions() {
+  try {
+    const txs = await get('/portfolio/transactions?limit=30');
+    const body = document.getElementById('txBody');
+    if (!txs.length) {
+      body.innerHTML = '<tr><td colspan="6" style="text-align:center;color:var(--t2)">No transactions yet</td></tr>';
+      return;
+    }
+    body.innerHTML = txs.map(t => {
+      const cls  = t.action === 'BUY' ? 'up' : 'dn';
+      const date = new Date(t.timestamp).toLocaleString('en-PK',{month:'short',day:'numeric',hour:'2-digit',minute:'2-digit'});
+      return `<tr>
+        <td style="color:var(--t2);font-size:12px">${date}</td>
+        <td class="${cls}" style="font-weight:600">${t.action}</td>
+        <td>${t.symbol}</td>
+        <td>${t.quantity}</td>
+        <td>PKR ${fmt(t.price)}</td>
+        <td>PKR ${fmt(t.total)}</td>
+      </tr>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function placeOrder(side) {
+  const symbol = document.getElementById('tradeSymbol').value;
+  const qty    = parseInt(document.getElementById('tradeQty').value);
+  if (!symbol || !qty || qty <= 0) return showToast('Enter a valid quantity', 'var(--loss)');
+
+  try {
+    const result = await post(`/portfolio/${side}`, { symbol, quantity: qty });
+    showToast(result.message, side === 'buy' ? 'var(--gain)' : 'var(--teal)');
+    await loadPortfolio();
+    loadActivity();
+  } catch(e) {
+    showToast(e.message, 'var(--loss)');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ALERTS
+// ═══════════════════════════════════════════════════════════════════════════
+async function loadAlerts() {
+  populateTradeSymbolSelects();
+  try {
+    const alertsList = await get('/alerts/?active_only=true');
+    const el = document.getElementById('alertsList');
+    if (!alertsList.length) {
+      el.innerHTML = '<div style="text-align:center;color:var(--t2);padding:16px">No active alerts</div>';
+      return;
+    }
+    el.innerHTML = alertsList.map(a => {
+      const dirText = a.direction === 'ABOVE' ? 'rises above' : 'falls below';
+      const date = new Date(a.created_at).toLocaleDateString('en-PK',{month:'short',day:'numeric'});
+      return `<div class="alert-item">
+        <div class="alert-info"><b>${a.symbol}</b> ${dirText} <b>PKR ${fmt(a.target_price)}</b>
+          <div style="color:var(--t2);font-size:11px;margin-top:2px">Created ${date}</div>
+        </div>
+        <button class="alert-del" onclick="deleteAlert(${a.id})">Remove</button>
+      </div>`;
+    }).join('');
+  } catch(e) {}
+}
+
+async function createAlert() {
+  const symbol    = document.getElementById('alertSymbol').value;
+  const direction = document.getElementById('alertDirection').value;
+  const price     = parseFloat(document.getElementById('alertPrice').value);
+  if (!symbol || !price || price <= 0) return showToast('Enter a valid target price', 'var(--loss)');
+
+  try {
+    await post('/alerts/', { symbol, target_price: price, direction });
+    showToast(`Alert created for ${symbol}`);
+    document.getElementById('alertPrice').value = '';
+    await loadAlerts();
+  } catch(e) {
+    showToast(e.message, 'var(--loss)');
+  }
+}
+
+async function deleteAlert(id) {
+  try {
+    await del(`/alerts/${id}`);
+    showToast('Alert removed', 'var(--loss)');
+    await loadAlerts();
+  } catch(e) {
+    showToast(e.message, 'var(--loss)');
+  }
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// WEBSOCKET — live price updates
+// ═══════════════════════════════════════════════════════════════════════════
+function connectWebSocket() {
+  try {
+    ws = new WebSocket(`${WS_URL}/ws/prices`);
+
+    ws.onopen = () => {
+      const pill = document.getElementById('livePill');
+      pill.classList.add('connected');
+      pill.classList.remove('disconnected');
+      pill.innerHTML = '<div class="live-dot"></div> Live';
+    };
+
+    ws.onmessage = (event) => {
+      const data = JSON.parse(event.data);
+      if (data.type === 'price_update') {
+        const searching = document.getElementById('searchInput').value.trim() ||
+                           document.getElementById('sectorFilter').value;
+        if (!searching && currentPage === 'dashboard') {
+          allQuotes = data.quotes;
+          renderTicker(data.quotes);
+          renderWatchlist(data.quotes);
+          renderMetrics(data.summary);
+          populateSectorFilter(data.quotes);
+
+          if (selectedSym) {
+            const q = data.quotes.find(s => s.symbol === selectedSym);
+            if (q) renderDetail(q);
+          }
+        } else if (currentPage !== 'dashboard') {
+          allQuotes = data.quotes;   // keep data fresh for portfolio/alerts dropdowns
+        }
+      }
+    };
+
+    ws.onclose = () => {
+      const pill = document.getElementById('livePill');
+      pill.classList.remove('connected');
+      pill.classList.add('disconnected');
+      pill.innerHTML = '<div class="live-dot"></div> Reconnecting...';
+      setTimeout(connectWebSocket, 5000);
+    };
+
+    ws.onerror = () => ws.close();
+  } catch(e) {
+    console.error('WebSocket error:', e);
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
