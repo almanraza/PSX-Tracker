@@ -1,99 +1,103 @@
 # PSX Stock Tracker
 
-Real-time Pakistan Stock Exchange dashboard with user authentication, personal watchlists, and activity tracking.
+![Python](https://img.shields.io/badge/Python-3.12-blue?style=flat-square&logo=python)
+![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green?style=flat-square&logo=fastapi)
+![SQLite](https://img.shields.io/badge/Database-SQLite-orange?style=flat-square&logo=sqlite)
+![AWS](https://img.shields.io/badge/Deployed-AWS%20EC2-yellow?style=flat-square&logo=amazon-aws)
+![License](https://img.shields.io/badge/License-MIT-purple?style=flat-square)
 
-![Python](https://img.shields.io/badge/Python-3.12-blue) ![FastAPI](https://img.shields.io/badge/FastAPI-0.115-green) ![SQLite](https://img.shields.io/badge/Database-SQLite-orange)
+A full-stack **Pakistan Stock Exchange (KSE-100) tracker** with user authentication, a virtual trading portfolio, real-time price alerts, WebSocket live updates, and a dark-mode dashboard — built with FastAPI and deployed on AWS EC2.
+
+🌐 **Live Demo:** [http://13.60.20.203](http://13.60.20.203)
+
+![PSX Tracker Dashboard](screenshot.png)
 
 ---
 
 ## Features
 
-- JWT login / register system
-- Live KSE-100 stock quotes (Yahoo Finance, ~15 min delay)
-- Price history charts (1D / 1W / 1M / 3M)
-- Personal watchlist per user (stored in database)
-- Full activity log — every action tracked
-- Auto-generated API docs at `/docs`
-- Deployable to Railway in 2 minutes
+- **JWT Authentication** — register, login, protected routes
+- **Live KSE-100 Data** — real stock prices scraped from public sources, refreshed every 5 minutes
+- **Virtual Portfolio Simulator** — PKR 1,000,000 starting balance, buy/sell at live prices, P&L tracking
+- **Price Alerts** — set target prices, get in-app notifications when triggered
+- **WebSocket Live Updates** — prices pushed to the browser every 15 seconds, no page refresh needed
+- **Search & Filter** — search by symbol/company, filter by sector, sort by price/change/volume
+- **Activity Log** — every user action tracked (login, views, trades, alerts)
+- **Background Scheduler** — auto-refreshes market data and checks alerts every few minutes
+- **Rate Limiting** — 120 requests/minute per IP
+- **Admin Panel** — platform stats, all users, full activity feed (admin role required)
+- **Auto-generated API docs** — Swagger UI at `/docs`
 
 ---
 
-## Run locally
+## Tech Stack
 
-```bash
-# 1. Clone and enter folder
-git clone https://github.com/yourusername/psx-stock-tracker
-cd psx-stock-tracker
-
-# 2. Create virtual environment
-python -m venv venv
-venv\Scripts\activate        # Windows
-# source venv/bin/activate   # Mac/Linux
-
-# 3. Install dependencies
-pip install -r requirements.txt
-
-# 4. Start the server
-uvicorn main:app --reload
-```
-
-Open http://localhost:8000 — dashboard loads with login screen.  
-Open http://localhost:8000/docs — full interactive API docs.
+| Layer | Technology |
+|---|---|
+| Backend | Python, FastAPI, Uvicorn |
+| Database | SQLite via SQLAlchemy ORM |
+| Auth | JWT (python-jose), bcrypt password hashing |
+| Data | Web scraping via cloudscraper + BeautifulSoup |
+| Real-time | WebSockets (FastAPI native) |
+| Scheduler | APScheduler |
+| Rate Limiting | SlowAPI |
+| Frontend | Vanilla JS, Chart.js |
+| Deployment | AWS EC2 (t3.micro), Nginx reverse proxy, systemd |
 
 ---
 
-## Deploy to Railway (free)
-
-1. Push this project to a GitHub repo
-2. Go to [railway.app](https://railway.app) → New Project → Deploy from GitHub
-3. Select your repo — Railway auto-detects Python and uses `Procfile`
-4. Add environment variables in Railway dashboard:
-   ```
-   SECRET_KEY=your_random_secret_here
-   ACCESS_TOKEN_EXPIRE_MINUTES=60
-   DATABASE_URL=sqlite:///./psx_tracker.db
-   ```
-5. Done — Railway gives you a public URL like `https://psx-tracker.up.railway.app`
-
-> **Update the API URL**: Once deployed, open `static/index.html` and change  
-> `const API = 'http://localhost:8000'`  
-> to your Railway URL, then redeploy.
-
----
-
-## Project structure
+## Project Structure
 
 ```
-psx-tracker/
-├── main.py                  # FastAPI app entry point
+PSX-Tracker/
+│
+├── main.py                  # FastAPI app entry point, all routers wired here
 ├── models.py                # Pydantic request/response schemas
-├── Procfile                 # Railway/Heroku start command
-├── railway.json             # Railway config
 ├── requirements.txt
 │
 ├── database/
-│   ├── db.py                # SQLAlchemy engine + session
-│   ├── models.py            # DB table definitions (users, watchlist, activity)
-│   └── crud.py              # All DB queries (create, read, update, delete)
+│   ├── db.py                # SQLAlchemy engine + session + init_db
+│   ├── models.py            # DB table definitions (7 tables)
+│   └── crud.py              # All DB queries — create, read, update, delete
 │
 ├── routers/
 │   ├── auth.py              # POST /auth/register, /auth/login, GET /auth/me
-│   ├── stocks.py            # GET /stocks, /stocks/{symbol}, /stocks/{symbol}/history
+│   ├── stocks.py            # GET /stocks, /stocks/{symbol}, /stocks/search
 │   ├── market.py            # GET /market/summary, /market/sectors, /market/movers
 │   ├── watchlist.py         # GET/POST/DELETE /watchlist/{symbol}
-│   └── activity.py          # GET /activity
+│   ├── portfolio.py         # GET /portfolio, POST /portfolio/buy, /portfolio/sell
+│   ├── alerts.py            # GET/POST/DELETE /alerts, GET /alerts/notifications
+│   ├── activity.py          # GET /activity
+│   ├── admin.py             # GET /admin/stats, /admin/users, /admin/activity
+│   └── ws.py                # WebSocket /ws/prices
 │
 ├── services/
-│   ├── psx_scraper.py       # Yahoo Finance data + mock fallback
-│   └── cache.py             # 5-minute TTL in-memory cache
+│   ├── psx_scraper.py       # Live PSX data scraping + mock fallback
+│   ├── cache.py             # In-memory TTL cache (5 min)
+│   └── scheduler.py         # APScheduler — market refresh + alert checker
 │
 └── static/
-    └── index.html           # Full dashboard frontend (login + app)
+    └── index.html           # Full dashboard frontend (auth + app, single file)
 ```
 
 ---
 
-## API endpoints
+## Database Schema
+
+```
+users           → id, email, username, full_name, hashed_password, is_admin
+watchlist       → id, user_id, symbol, added_at
+activity_log    → id, user_id, action, detail, ip_address, timestamp
+portfolios      → id, user_id, cash_balance
+holdings        → id, portfolio_id, symbol, quantity, avg_cost
+transactions    → id, user_id, symbol, action, quantity, price, total, timestamp
+price_alerts    → id, user_id, symbol, target_price, direction, triggered
+notifications   → id, user_id, message, read, created_at
+```
+
+---
+
+## API Endpoints
 
 | Method | Endpoint | Auth | Description |
 |--------|----------|------|-------------|
@@ -101,26 +105,78 @@ psx-tracker/
 | POST | `/auth/login` | No | Get JWT token |
 | GET | `/auth/me` | Yes | Current user info |
 | GET | `/stocks` | Yes | All stock quotes |
+| GET | `/stocks/search` | Yes | Search + filter + sort |
 | GET | `/stocks/{symbol}` | Yes | Single stock detail |
-| GET | `/stocks/{symbol}/history?period=1W` | Yes | Price chart data |
+| GET | `/stocks/{symbol}/history` | Yes | Price chart data |
 | GET | `/market/summary` | Yes | KSE-100 index stats |
 | GET | `/market/sectors` | Yes | Sector breakdown |
 | GET | `/market/movers` | Yes | Top gainers/losers |
-| GET | `/watchlist` | Yes | User's watchlist with prices |
+| GET | `/watchlist` | Yes | User's watchlist |
 | POST | `/watchlist/{symbol}` | Yes | Add to watchlist |
 | DELETE | `/watchlist/{symbol}` | Yes | Remove from watchlist |
-| GET | `/activity` | Yes | User's activity history |
+| GET | `/portfolio` | Yes | Portfolio summary + holdings |
+| POST | `/portfolio/buy` | Yes | Buy shares |
+| POST | `/portfolio/sell` | Yes | Sell shares |
+| GET | `/portfolio/transactions` | Yes | Trade history |
+| GET | `/alerts` | Yes | Active price alerts |
+| POST | `/alerts` | Yes | Create price alert |
+| DELETE | `/alerts/{id}` | Yes | Delete alert |
+| GET | `/alerts/notifications` | Yes | In-app notifications |
+| GET | `/activity` | Yes | User activity log |
+| GET | `/admin/stats` | Admin | Platform stats |
+| WS | `/ws/prices` | No | Live price stream |
+| GET | `/docs` | No | Swagger UI |
 
 ---
 
-## Data source
+## Run Locally
 
-Yahoo Finance via `yfinance` — PSX stocks listed under `.KA` suffix (e.g. `OGDC.KA`).  
-Data is real and delayed ~15 minutes. Falls back to seeded mock data when Yahoo is unreachable.
+```bash
+# 1. Clone the repo
+git clone https://github.com/almanraza/PSX-Tracker.git
+cd PSX-Tracker
 
-## Tech stack
+# 2. Create virtual environment
+python -m venv venv
+venv\Scripts\activate       # Windows
+# source venv/bin/activate  # Mac/Linux
 
-**Backend:** Python, FastAPI, SQLAlchemy, SQLite, JWT, bcrypt  
-**Data:** yfinance (Yahoo Finance)  
-**Frontend:** Vanilla JS, Chart.js  
-**Deployment:** Railway
+# 3. Install dependencies
+pip install -r requirements.txt
+
+# 4. Create .env file
+SECRET_KEY=your_secret_key_here
+ACCESS_TOKEN_EXPIRE_MINUTES=60
+DATABASE_URL=sqlite:///./psx_tracker.db
+
+# 5. Run the server
+uvicorn main:app --reload
+```
+
+Open `http://localhost:8000` for the dashboard.
+Open `http://localhost:8000/docs` for interactive API docs.
+
+---
+
+## Deployment (AWS EC2)
+
+Deployed on **AWS EC2 t3.micro** (Ubuntu 22.04) with Nginx as reverse proxy and systemd for auto-restart.
+
+```bash
+sudo systemctl status psx-tracker    # check status
+sudo systemctl restart psx-tracker   # restart after changes
+sudo journalctl -u psx-tracker -f    # view live logs
+```
+
+---
+
+## Author
+
+**Alman Raza**
+- GitHub: [@almanraza](https://github.com/almanraza)
+
+---
+
+## License
+
+MIT License — see [LICENSE](LICENSE) for details.
