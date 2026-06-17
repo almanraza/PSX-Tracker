@@ -1,17 +1,28 @@
-# Virtual environment
-venv/
+# Environment
 .env
+*.env
 
-# Python cache
+# Database
+*.db
+*.sqlite3
+
+# Python
 __pycache__/
 *.pyc
+*.pyo
+venv/
+.venv/
+env/
 
-# Database (optional)
-*.db
+# Logs
+*.log
+nohup.out
+app.log
 
-# VS Code
-.vscode/
-
-# Windows
+# OS
+.DS_Store
 Thumbs.db
-Desktop.ini
+
+# IDE
+.vscode/
+.idea/
